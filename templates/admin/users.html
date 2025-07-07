@@ -1,0 +1,180 @@
+{% extends 'admin/base.html' %}
+{% block content %}
+<h2>用户管理</h2>
+<div>
+    <button id="addUserBtn">新增用户</button>
+    <table border="1" cellpadding="8" cellspacing="0">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>用户名</th>
+                <th>邮箱</th>
+                <th>管理员</th>
+                <th>创建时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="userTableBody">
+        </tbody>
+    </table>
+</div>
+
+<!-- 新增/编辑用户弹窗 -->
+<div id="userModal" style="display:none; position:fixed; left:40%; top:20%; background:#fff; border:1px solid #ccc; padding:20px;">
+    <h3 id="modalTitle">新增用户</h3>
+    <form id="userForm">
+        <input type="hidden" name="id" id="userId">
+        <div>
+            <label>用户名：</label><input type="text" name="username" id="username" required>
+        </div>
+        <div>
+            <label>邮箱：</label><input type="email" name="email" id="email" required>
+        </div>
+        <div>
+            <label>密码：</label><input type="password" name="password" id="password">
+        </div>
+        <div>
+            <label>管理员：</label><input type="checkbox" name="is_admin" id="is_admin">
+        </div>
+        <div>
+            <button type="submit">保存</button>
+            <button type="button" onclick="closeModal()">取消</button>
+        </div>
+    </form>
+</div>
+
+<!-- 修改密码弹窗 -->
+<div id="pwdModal" style="display:none; position:fixed; left:40%; top:30%; background:#fff; border:1px solid #ccc; padding:20px;">
+    <h3>修改密码</h3>
+    <form id="pwdForm">
+        <input type="hidden" id="pwdUserId">
+        <div>
+            <label>新密码：</label><input type="password" id="newPwd" required>
+        </div>
+        <div>
+            <button type="submit">修改</button>
+            <button type="button" onclick="closePwdModal()">取消</button>
+        </div>
+    </form>
+</div>
+
+<script>
+function fetchUsers() {
+    fetch('/admin/api/users')
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('userTableBody');
+            tbody.innerHTML = '';
+            data.items.forEach(u => {
+                tbody.innerHTML += `<tr>
+                    <td>${u.id}</td>
+                    <td>${u.username}</td>
+                    <td>${u.email}</td>
+                    <td>${u.is_admin ? '是' : '否'}</td>
+                    <td>${u.created_at.replace('T',' ').slice(0,19)}</td>
+                    <td>
+                        <button onclick="editUser(${u.id}, '${u.username}', '${u.email}', ${u.is_admin})">编辑</button>
+                        <button onclick="deleteUser(${u.id})">删除</button>
+                        <button onclick="openPwdModal(${u.id})">重置密码</button>
+                    </td>
+                </tr>`;
+            });
+        });
+}
+
+function openModal() {
+    document.getElementById('userModal').style.display = 'block';
+    document.getElementById('modalTitle').innerText = '新增用户';
+    document.getElementById('userForm').reset();
+    document.getElementById('userId').value = '';
+}
+function closeModal() {
+    document.getElementById('userModal').style.display = 'none';
+}
+function editUser(id, username, email, is_admin) {
+    openModal();
+    document.getElementById('modalTitle').innerText = '编辑用户';
+    document.getElementById('userId').value = id;
+    document.getElementById('username').value = username;
+    document.getElementById('email').value = email;
+    document.getElementById('password').value = '';
+    document.getElementById('is_admin').checked = is_admin;
+}
+document.getElementById('addUserBtn').onclick = openModal;
+document.getElementById('userForm').onsubmit = function(e) {
+    e.preventDefault();
+    const id = document.getElementById('userId').value;
+    const username = document.getElementById('username').value;
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const is_admin = document.getElementById('is_admin').checked;
+    if (id) {
+        // 编辑
+        fetch(`/api/user/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, email, is_admin})
+        }).then(r => r.json()).then(res => {
+            if (res.error) alert(res.error);
+            else {
+                closeModal();
+                fetchUsers();
+            }
+        });
+        if (password) {
+            // 单独重置密码
+            fetch(`/api/user/${id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({password})
+            });
+        }
+    } else {
+        // 新增
+        fetch('/api/user', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, email, password, is_admin})
+        }).then(r => r.json()).then(res => {
+            if (res.error) alert(res.error);
+            else {
+                closeModal();
+                fetchUsers();
+            }
+        });
+    }
+};
+function deleteUser(id) {
+    if (!confirm('确定要删除该用户吗？')) return;
+    fetch(`/api/user/${id}`, {method: 'DELETE'}).then(r => r.json()).then(res => {
+        if (res.error) alert(res.error);
+        else fetchUsers();
+    });
+}
+function openPwdModal(id) {
+    document.getElementById('pwdModal').style.display = 'block';
+    document.getElementById('pwdUserId').value = id;
+    document.getElementById('newPwd').value = '';
+}
+function closePwdModal() {
+    document.getElementById('pwdModal').style.display = 'none';
+}
+document.getElementById('pwdForm').onsubmit = function(e) {
+    e.preventDefault();
+    const id = document.getElementById('pwdUserId').value;
+    const new_password = document.getElementById('newPwd').value;
+    fetch(`/api/user/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({password: new_password})
+    }).then(r => r.json()).then(res => {
+        if (res.error) alert(res.error);
+        else {
+            closePwdModal();
+            fetchUsers();
+        }
+    });
+};
+window.onload = fetchUsers;
+</script>
+{% endblock %} 
