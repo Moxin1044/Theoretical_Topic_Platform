@@ -1,0 +1,438 @@
+{% extends "admin/base.html" %}
+
+{% block title %}试卷管理 - 理论题平台{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-3">
+    <div class="row align-items-center">
+        <div class="col">
+            <div class="btn-group">
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addPaperModal">
+                    <i class="bi bi-plus-lg"></i> 新建试卷
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>试卷管理</h2>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>标题</th>
+                    <th>题目数量</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for paper in papers %}
+                <tr>
+                    <td>{{ paper.id }}</td>
+                    <td>{{ paper.title }}</td>
+                    <td>{{ paper.questions|length }}</td>
+                    <td>{{ paper.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-primary" onclick="editPaper({{ paper.id }})">
+                                <i class="bi bi-pencil"></i> 编辑
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deletePaper({{ paper.id }})">
+                                <i class="bi bi-trash"></i> 删除
+                            </button>
+                            <a href="{{ url_for('export_questions', paper_id=paper.id) }}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-download"></i> 导出题目
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if papers.pages > 1 %}
+    <div class="card-footer bg-white py-3 mt-3">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center mb-0">
+                <li class="page-item {% if not papers.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('manage_papers', page=papers.prev_num) if papers.has_prev else '#' }}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                {% for page_num in papers.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=3) %}
+                    {% if page_num %}
+                        {% if papers.page == page_num %}
+                            <li class="page-item active"><a class="page-link" href="{{ url_for('manage_papers', page=page_num) }}">{{ page_num }}</a></li>
+                        {% else %}
+                            <li class="page-item"><a class="page-link" href="{{ url_for('manage_papers', page=page_num) }}">{{ page_num }}</a></li>
+                        {% endif %}
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {% if not papers.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('manage_papers', page=papers.next_num) if papers.has_next else '#' }}" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Edit Paper Modal -->
+<div class="modal fade" id="editPaperModal" tabindex="-1" aria-labelledby="editPaperModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editPaperModalLabel">编辑试卷</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editPaperForm">
+                    <input type="hidden" id="editPaperId">
+                    <div class="mb-3">
+                        <label for="editTitle" class="form-label">试卷标题</label>
+                        <input type="text" class="form-control" id="editTitle" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editDescription" class="form-label">试卷说明</label>
+                        <textarea class="form-control" id="editDescription" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">试卷题目</label>
+                        <div id="editQuestionList" class="list-group mb-3">
+                            <!-- 题目列表将通过 JavaScript 动态添加 -->
+                        </div>
+                        <button type="button" class="btn btn-outline-primary" onclick="showQuestionSelector()">
+                            <i class="bi bi-plus-circle"></i> 添加题目
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="updatePaper()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Question Selector Modal -->
+<div class="modal fade" id="questionSelectorModal" tabindex="-1" aria-labelledby="questionSelectorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="questionSelectorModalLabel">选择题目</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex mb-3">
+                    <input type="search" id="questionSearchInput" class="form-control me-2" placeholder="搜索题目...">
+                    <button type="button" class="btn btn-outline-primary" onclick="searchQuestions()">搜索</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input type="checkbox" id="selectAllQuestions" onchange="toggleSelectAllQuestions()">
+                                </th>
+                                <th>ID</th>
+                                <th>类型</th>
+                                <th>内容</th>
+                            </tr>
+                        </thead>
+                        <tbody id="questionSelectorList">
+                            <!-- 题目列表将通过 JavaScript 动态添加 -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="questionPagination" class="d-flex justify-content-center mt-3">
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination mb-0">
+                            <li class="page-item" id="prevPageItem">
+                                <a class="page-link" href="#" onclick="changePage(currentPage - 1)" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item disabled"><span class="page-link" id="pageInfo"></span></li>
+                            <li class="page-item" id="nextPageItem">
+                                <a class="page-link" href="#" onclick="changePage(currentPage + 1)" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="addSelectedQuestions()">添加所选题目</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deletePaperConfirmModal" tabindex="-1" aria-labelledby="deletePaperConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deletePaperConfirmModalLabel">确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                确定要删除这份试卷吗？此操作不可恢复。
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDeletePaper()">删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+let currentPaperId = null;
+let paperQuestions = [];
+let availableQuestions = [];
+
+function editPaper(paperId) {
+    currentPaperId = paperId;
+    
+    // 显示加载状态
+    const modal = new bootstrap.Modal(document.getElementById('editPaperModal'));
+    modal.show();
+    
+    // 获取试卷数据
+    fetch(`/admin/papers/${paperId}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('editPaperId').value = data.id;
+            document.getElementById('editTitle').value = data.title;
+            document.getElementById('editDescription').value = data.description;
+            
+            // 更新题目列表
+            paperQuestions = data.questions;
+            updateQuestionList();
+        })
+        .catch(error => {
+            alert('加载试卷失败：' + error.message);
+            modal.hide();
+        });
+}
+
+function updateQuestionList() {
+    const questionList = document.getElementById('editQuestionList');
+    questionList.innerHTML = '';
+    
+    paperQuestions.forEach((question, index) => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <div>
+                <span class="badge bg-secondary me-2">${question.id}</span>
+                ${question.content}
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeQuestion(${index})">
+                <i class="bi bi-x"></i>
+            </button>
+        `;
+        questionList.appendChild(item);
+    });
+}
+
+function removeQuestion(index) {
+    paperQuestions.splice(index, 1);
+    updateQuestionList();
+}
+
+let currentPage = 1;
+let totalPages = 1;
+let questionSearchQuery = '';
+
+function showQuestionSelector() {
+    currentPage = 1;
+    loadQuestions();
+}
+
+function loadQuestions() {
+    // 显示加载状态
+    const tbody = document.getElementById('questionSelectorList');
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>';
+    
+    let url = `/admin/api/questions?page=${currentPage}&per_page=20`;
+    if (questionSearchQuery) {
+        url += `&q=${encodeURIComponent(questionSearchQuery)}`;
+    }
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            availableQuestions = data.items;
+            totalPages = data.pages;
+            
+            tbody.innerHTML = '';
+            
+            if (data.items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">未找到题目</td></tr>';
+            } else {
+                data.items.forEach(question => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <input type="checkbox" class="question-selector" value="${question.id}"
+                                ${paperQuestions.some(q => q.id === question.id) ? 'checked disabled' : ''}>
+                        </td>
+                        <td>${question.id}</td>
+                        <td>${question.type}</td>
+                        <td>${question.content}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+            
+            // 更新分页信息
+            document.getElementById('pageInfo').textContent = `第 ${currentPage} 页 / 共 ${totalPages} 页`;
+            document.getElementById('prevPageItem').classList.toggle('disabled', !data.has_prev);
+            document.getElementById('nextPageItem').classList.toggle('disabled', !data.has_next);
+            
+            // 显示模态框
+            new bootstrap.Modal(document.getElementById('questionSelectorModal')).show();
+        })
+        .catch(error => {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">加载失败</td></tr>';
+            alert('加载题目列表失败：' + error.message);
+        });
+}
+
+function searchQuestions() {
+    questionSearchQuery = document.getElementById('questionSearchInput').value.trim();
+    currentPage = 1;
+    loadQuestions();
+}
+
+function changePage(page) {
+    if (page < 1 || page > totalPages) return;
+    currentPage = page;
+    loadQuestions();
+}
+
+function toggleSelectAllQuestions() {
+    const selectAll = document.getElementById('selectAllQuestions');
+    const checkboxes = document.querySelectorAll('.question-selector:not(:disabled)');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+function addSelectedQuestions() {
+    const selectedIds = Array.from(document.querySelectorAll('.question-selector:checked'))
+        .map(checkbox => parseInt(checkbox.value));
+    
+    // 添加新选中的题目
+    selectedIds.forEach(id => {
+        if (!paperQuestions.some(q => q.id === id)) {
+            const question = availableQuestions.find(q => q.id === id);
+            if (question) {
+                paperQuestions.push(question);
+            }
+        }
+    });
+    
+    updateQuestionList();
+    bootstrap.Modal.getInstance(document.getElementById('questionSelectorModal')).hide();
+}
+
+function updatePaper() {
+    if (!currentPaperId) return;
+    
+    const data = {
+        title: document.getElementById('editTitle').value,
+        description: document.getElementById('editDescription').value,
+        questions: paperQuestions.map(q => q.id)
+    };
+    
+    // 显示加载状态
+    const saveButton = document.querySelector('#editPaperModal .btn-primary');
+    const originalText = saveButton.textContent;
+    saveButton.disabled = true;
+    saveButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 保存中...';
+    
+    fetch(`/admin/papers/${currentPaperId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('保存失败：' + data.error);
+        } else {
+            // 关闭模态框并刷新页面
+            bootstrap.Modal.getInstance(document.getElementById('editPaperModal')).hide();
+            window.location.reload();
+        }
+    })
+    .catch(error => {
+        alert('保存失败：' + error.message);
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        saveButton.disabled = false;
+        saveButton.textContent = originalText;
+    });
+}
+
+function deletePaper(paperId) {
+    currentPaperId = paperId;
+    const modal = new bootstrap.Modal(document.getElementById('deletePaperConfirmModal'));
+    modal.show();
+}
+
+function confirmDeletePaper() {
+    if (!currentPaperId) return;
+    
+    // 显示加载状态
+    const deleteButton = document.querySelector('#deletePaperConfirmModal .btn-danger');
+    const originalText = deleteButton.textContent;
+    deleteButton.disabled = true;
+    deleteButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 删除中...';
+    
+    fetch(`/admin/papers/${currentPaperId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('删除失败：' + data.error);
+        } else {
+            // 关闭模态框并刷新页面
+            bootstrap.Modal.getInstance(document.getElementById('deletePaperConfirmModal')).hide();
+            window.location.reload();
+        }
+    })
+    .catch(error => {
+        alert('删除失败：' + error.message);
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        deleteButton.disabled = false;
+        deleteButton.textContent = originalText;
+    });
+}
+</script>
+{% endblock %}

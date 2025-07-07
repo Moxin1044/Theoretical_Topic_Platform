@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ paper.title }} - 理论题平台{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h2>{{ paper.title }}</h2>
+    <p class="text-muted">{{ paper.description }}</p>
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <span class="badge bg-primary">题目数量: {{ paper.questions|length }}</span>
+            <span class="badge bg-secondary">创建时间: {{ paper.created_at.strftime('%Y-%m-%d') }}</span>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('export_questions', paper_id=paper.id) }}" class="btn btn-outline-primary">
+                <i class="bi bi-download"></i> 导出试卷题目
+            </a>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">返回列表</a>
+        </div>
+    </div>
+</div>
+
+<div class="accordion" id="questionAccordion">
+    {% for question in paper.questions %}
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="heading{{ question.id }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#collapse{{ question.id }}">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <span>第 {{ loop.index }} 题 - 
+                        {% if question.type == 'single_choice' %}
+                        单选题
+                        {% elif question.type == 'multiple_choice' %}
+                        多选题
+                        {% elif question.type == 'essay' %}
+                        问答题
+                        {% else %}
+                        填空题
+                        {% endif %}
+                    </span>
+                </div>
+            </button>
+        </h2>
+        <div id="collapse{{ question.id }}" class="accordion-collapse collapse" data-bs-parent="#questionAccordion">
+            <div class="accordion-body">
+                <div class="question-content mb-3">
+                    {{ question.content }}
+                </div>
+
+                {% if question.type in ['single_choice', 'multiple_choice'] and question.options %}
+                <div class="options-list mb-3">
+                    {% for option in question.options %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="{{ 'radio' if question.type == 'single_choice' else 'checkbox' }}"
+                               name="question{{ question.id }}" id="option{{ loop.index }}" value="{{ option }}">
+                        <label class="form-check-label" for="option{{ loop.index }}">
+                            {{ option }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="answer-section">
+                    <button class="btn btn-primary btn-sm show-answer" type="button"
+                            onclick="toggleAnswer(this, '{{ question.id }}')">
+                        显示答案
+                    </button>
+                    <div class="answer-content mt-2" id="answer{{ question.id }}" style="display: none;">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">正确答案</h6>
+                                <p class="card-text">{{ question.correct_answer }}</p>
+                                {% if question.explanation %}
+                                <h6 class="card-subtitle mb-2 text-muted mt-3">解析</h6>
+                                <p class="card-text">{{ question.explanation }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleAnswer(button, questionId) {
+    const answerDiv = document.getElementById('answer' + questionId);
+    if (answerDiv.style.display === 'none') {
+        answerDiv.style.display = 'block';
+        button.textContent = '隐藏答案';
+    } else {
+        answerDiv.style.display = 'none';
+        button.textContent = '显示答案';
+    }
+}
+</script>
+{% endblock %} 

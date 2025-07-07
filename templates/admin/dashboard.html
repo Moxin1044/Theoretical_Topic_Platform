@@ -1,0 +1,124 @@
+{% extends "admin/base.html" %}
+
+{% block title %}管理面板 - 理论题平台{% endblock %}
+
+{% block admin_content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="mb-4">
+            <i class="bi bi-speedometer2 me-2"></i>管理面板
+        </h2>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- 题目统计卡片 -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-question-circle text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h6 class="card-subtitle mb-1 text-muted">总题目数</h6>
+                        <h2 class="card-title mb-0">{{ questions_count }}</h2>
+                    </div>
+                </div>
+                <a href="{{ url_for('manage_questions') }}" class="btn btn-outline-primary w-100">
+                    <i class="bi bi-arrow-right me-2"></i>管理题目
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 试卷统计卡片 -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-file-text text-success" style="font-size: 2rem;"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h6 class="card-subtitle mb-1 text-muted">总试卷数</h6>
+                        <h2 class="card-title mb-0">{{ papers_count }}</h2>
+                    </div>
+                </div>
+                <a href="{{ url_for('manage_papers') }}" class="btn btn-outline-success w-100">
+                    <i class="bi bi-arrow-right me-2"></i>管理试卷
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户统计卡片 -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-people text-info" style="font-size: 2rem;"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h6 class="card-subtitle mb-1 text-muted">总用户数</h6>
+                        <h2 class="card-title mb-0">{{ users_count }}</h2>
+                    </div>
+                </div>
+                <button class="btn btn-outline-info w-100" disabled>
+                    <i class="bi bi-arrow-right me-2"></i>管理用户
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-4">
+                    <i class="bi bi-lightning me-2"></i>快捷操作
+                </h5>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <a href="{{ url_for('manage_questions') }}" class="btn btn-light w-100 text-start p-3 border">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-plus-circle text-primary me-3" style="font-size: 1.5rem;"></i>
+                                <div>
+                                    <h6 class="mb-1">添加新题目</h6>
+                                    <small class="text-muted">创建新的题目到题库中</small>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="{{ url_for('manage_papers') }}" class="btn btn-light w-100 text-start p-3 border">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-file-earmark-plus text-success me-3" style="font-size: 1.5rem;"></i>
+                                <div>
+                                    <h6 class="mb-1">创建新试卷</h6>
+                                    <small class="text-muted">从题库中组织新的试卷</small>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+function updateTime() {
+    const now = new Date();
+    document.getElementById('current-time').textContent = now.toLocaleString('zh-CN');
+}
+
+updateTime();
+setInterval(updateTime, 1000);
+</script>
+{% endblock %} 

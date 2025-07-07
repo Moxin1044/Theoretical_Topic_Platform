@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - 理论题平台{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>试卷列表</h2>
+    </div>
+    <div class="col-auto">
+        <form action="{{ url_for('search') }}" class="d-flex" method="get">
+            <input type="search" name="q" class="form-control me-2" placeholder="搜索题目...">
+            <button type="submit" class="btn btn-outline-primary">搜索</button>
+        </form>
+    </div>
+</div>
+
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+    {% for paper in papers.items %}
+    <div class="col">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ paper.title }}</h5>
+                <p class="card-text">{{ paper.description }}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group">
+                        <a href="{{ url_for('view_paper', id=paper.id) }}" class="btn btn-sm btn-outline-primary">查看试卷</a>
+                    </div>
+                    <small class="text-muted">题目数量: {{ paper.questions|length }}</small>
+                </div>
+            </div>
+            <div class="card-footer text-muted">
+                创建时间: {{ paper.created_at.strftime('%Y-%m-%d') }}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-info">
+            暂无试卷
+        </div>
+    </div>
+    {% endfor %}
+    </div>
+    {% if papers.pages > 1 %}
+    <div class="d-flex justify-content-center mt-4">
+        <nav aria-label="Page navigation">
+            <ul class="pagination">
+                <li class="page-item {% if not papers.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('index', page=papers.prev_num) if papers.has_prev else '#' }}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                {% for page_num in papers.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=3) %}
+                    {% if page_num %}
+                        {% if papers.page == page_num %}
+                            <li class="page-item active"><a class="page-link" href="{{ url_for('index', page=page_num) }}">{{ page_num }}</a></li>
+                        {% else %}
+                            <li class="page-item"><a class="page-link" href="{{ url_for('index', page=page_num) }}">{{ page_num }}</a></li>
+                        {% endif %}
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {% if not papers.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('index', page=papers.next_num) if papers.has_next else '#' }}" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+{% endblock %}

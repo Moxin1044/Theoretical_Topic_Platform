@@ -1,0 +1,824 @@
+{% extends "admin/base.html" %}
+
+{% block title %}题目管理 - 理论题平台{% endblock %}
+
+{% block styles %}
+<style>
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .loading-spinner {
+        width: 3rem;
+        height: 3rem;
+    }
+
+    .action-buttons {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .table-responsive:hover .action-buttons {
+        opacity: 1;
+    }
+
+    .btn-group .btn {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .btn-group .btn::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        transition: width 0.3s, height 0.3s;
+    }
+
+    .btn-group .btn:active::after {
+        width: 200%;
+        height: 200%;
+    }
+</style>
+{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-3">
+<div>
+        <form method="GET" action="{{ url_for('manage_questions') }}" class="mb-3">
+        <div class="input-group">
+            <input type="text" name="q" class="form-control" placeholder="搜索题目内容..." value="{{ request.args.get('q', '') }}">
+            <button class="btn btn-primary" type="submit">
+                <i class="bi bi-search"></i> 搜索
+            </button>
+        </div>
+    </form>
+    </div>
+    <div class="row align-items-center mb-4">
+        <div class="col">
+
+    <div class="btn-group">
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#importModal">
+                    <i class="bi bi-upload"></i> 导入题目
+                </button>
+                <a href="{{ url_for('export_template') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-download"></i> 下载导入模板
+                </a>
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addQuestionModal">
+                    <i class="bi bi-plus-lg"></i> 添加题目
+                </button>
+            </div>
+        </div>
+{#        {% if questions.pages > 1 %}#}
+{#        <div class="card-footer bg-white py-3">#}
+{#            <nav aria-label="Page navigation">#}
+{#                <ul class="pagination justify-content-center mb-0">#}
+{#                    <li class="page-item {% if not questions.has_prev %}disabled{% endif %}">#}
+{#                        <a class="page-link" href="{{ url_for('manage_questions', page=questions.prev_num, q=query) if questions.has_prev else '#' }}" aria-label="Previous">#}
+{#                            <span aria-hidden="true">&laquo;</span>#}
+{#                        </a>#}
+{#                    </li>#}
+{#                    {% for page_num in questions.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=3) %}#}
+{#                        {% if page_num %}#}
+{#                            {% if questions.page == page_num %}#}
+{#                                <li class="page-item active"><a class="page-link" href="{{ url_for('manage_questions', page=page_num, q=query) }}">{{ page_num }}</a></li>#}
+{#                            {% else %}#}
+{#                                <li class="page-item"><a class="page-link" href="{{ url_for('manage_questions', page=page_num, q=query) }}">{{ page_num }}</a></li>#}
+{#                            {% endif %}#}
+{#                        {% else %}#}
+{#                            <li class="page-item disabled"><span class="page-link">...</span></li>#}
+{#                        {% endif %}#}
+{#                    {% endfor %}#}
+{#                    <li class="page-item {% if not questions.has_next %}disabled{% endif %}">#}
+{#                        <a class="page-link" href="{{ url_for('manage_questions', page=questions.next_num, q=query) if questions.has_next else '#' }}" aria-label="Next">#}
+{#                            <span aria-hidden="true">&raquo;</span>#}
+{#                        </a>#}
+{#                    </li>#}
+{#                </ul>#}
+{#            </nav>#}
+{#        </div>#}
+{#        {% endif %}#}
+        <div class="col-auto">
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-primary" id="exportSelected" onclick="exportSelected()" disabled>
+                    <i class="bi bi-download"></i> 导出选中
+                </button>
+                <button type="button" class="btn btn-outline-danger" id="deleteSelected" onclick="deleteSelected()" disabled>
+                    <i class="bi bi-trash"></i> 删除选中
+                </button>
+                <button type="button" class="btn btn-outline-danger" onclick="confirmClearAll()">
+                    <i class="bi bi-trash-fill"></i> 清空题库
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 题目列表 -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white py-3">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-check me-2"></i>题目管理
+                        <small class="text-muted ms-2">共 {{ questions.total }} 题</small>
+                    </h5>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="40">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAll()">
+                                </div>
+                            </th>
+                            <th width="60">ID</th>
+                            <th width="100">类型</th>
+                            <th>内容</th>
+                            <th width="150">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for question in questions %}
+                        <tr>
+                            <td>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input question-checkbox" value="{{ question.id }}" onchange="updateButtons()">
+                                </div>
+                            </td>
+                            <td>{{ question.id }}</td>
+                            <td>
+                                <span class="badge bg-{{ {
+                                    'single_choice': 'primary',
+                                    'multiple_choice': 'success',
+                                    'essay': 'info',
+                                    'fill_blank': 'warning'
+                                }[question.type] }}">
+                                    {{ {
+                                        'single_choice': '单选题',
+                                        'multiple_choice': '多选题',
+                                        'essay': '问答题',
+                                        'fill_blank': '填空题'
+                                    }[question.type] }}
+                                </span>
+                            </td>
+                            <td>{{ question.content }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" onclick="editQuestion({{ question.id }})">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="deleteQuestion({{ question.id }})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% if questions.pages > 1 %}
+    <div class="card-footer bg-white py-3">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center mb-0">
+                <li class="page-item {% if not questions.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('manage_questions', page=questions.prev_num, q=query) if questions.has_prev else '#' }}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                {% for page_num in questions.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=3) %}
+                    {% if page_num %}
+                        {% if questions.page == page_num %}
+                            <li class="page-item active"><a class="page-link" href="{{ url_for('manage_questions', page=page_num, q=query) }}">{{ page_num }}</a></li>
+                        {% else %}
+                            <li class="page-item"><a class="page-link" href="{{ url_for('manage_questions', page=page_num, q=query) }}">{{ page_num }}</a></li>
+                        {% endif %}
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {% if not questions.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('manage_questions', page=questions.next_num, q=query) if questions.has_next else '#' }}" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Clear All Confirmation Modal -->
+<div class="modal fade" id="clearAllModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title text-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>清空确认
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">确定要清空题库吗？此操作不可恢复！</p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" onclick="clearAll()">
+                    <i class="bi bi-trash-fill me-2"></i>确认清空
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Delete Confirmation Modal -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title text-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>批量删除确认
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除选中的 <span id="selectedCount">0</span> 个题目吗？此操作不可恢复！</p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" onclick="bulkDelete()">
+                    <i class="bi bi-trash me-2"></i>确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1" aria-labelledby="importModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="importModalLabel">导入题目</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="importForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="importFile" class="form-label">选择Excel文件</label>
+                        <input type="file" class="form-control" id="importFile" name="file" accept=".xlsx" required>
+                        <div class="form-text">请上传.xlsx格式的Excel文件。可以先下载模板，按格式填写后再上传。</div>
+                    </div>
+                </form>
+                <div id="importResult" class="alert" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="importQuestions()">导入</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Question Modal -->
+<div class="modal fade" id="addQuestionModal" tabindex="-1" aria-labelledby="addQuestionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新增题目</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="questionForm" method="POST">
+                    <div class="mb-3">
+                        <label for="type" class="form-label">题目类型</label>
+                        <select class="form-select" id="type" name="type" required onchange="toggleOptionsSection()">
+                            <option value="single_choice">单选题</option>
+                            <option value="multiple_choice">多选题</option>
+                            <option value="essay">问答题</option>
+                            <option value="fill_blank">填空题</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="content" class="form-label">题目内容</label>
+                        <textarea class="form-control" id="content" name="content" rows="3" required></textarea>
+                    </div>
+                    <div id="optionsSection" class="mb-3">
+                        <label class="form-label">选项</label>
+                        <div id="optionsList">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" name="options[]" placeholder="选项内容">
+                                <button type="button" class="btn btn-outline-danger" onclick="removeOption(this)">
+                                    <i class="bi bi-dash-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addOption()">
+                            <i class="bi bi-plus-circle"></i> 添加选项
+                        </button>
+                    </div>
+                    <div class="mb-3">
+                        <label for="correct_answer" class="form-label">正确答案</label>
+                        <textarea class="form-control" id="correct_answer" name="correct_answer" rows="2" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="explanation" class="form-label">解析</label>
+                        <textarea class="form-control" id="explanation" name="explanation" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitQuestion()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Question Modal -->
+<div class="modal fade" id="editQuestionModal" tabindex="-1" aria-labelledby="editQuestionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editQuestionModalLabel">编辑题目</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editQuestionForm">
+                    <input type="hidden" id="editQuestionId">
+                    <div class="mb-3">
+                        <label for="editType" class="form-label">题目类型</label>
+                        <select class="form-select" id="editType" onchange="toggleEditOptionsSection()">
+                            <option value="single_choice">单选题</option>
+                            <option value="multiple_choice">多选题</option>
+                            <option value="essay">问答题</option>
+                            <option value="fill_blank">填空题</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editContent" class="form-label">题目内容</label>
+                        <textarea class="form-control" id="editContent" rows="3" required></textarea>
+                    </div>
+                    <div id="editOptionsSection" class="mb-3">
+                        <label for="editOptions" class="form-label">选项（每行一个选项，格式如：A.选项内容）</label>
+                        <textarea class="form-control" id="editOptions" rows="4"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editCorrectAnswer" class="form-label">正确答案</label>
+                        <input type="text" class="form-control" id="editCorrectAnswer" required>
+                        <div class="form-text">单选题填写选项字母(如：A)，多选题用逗号分隔(如：A,B,C)，问答题和填空题直接填写答案</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editExplanation" class="form-label">解析</label>
+                        <textarea class="form-control" id="editExplanation" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="updateQuestion()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteConfirmModalLabel">确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                确定要删除这道题目吗？此操作不可恢复。
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDelete()">删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+// 初始化所有工具提示
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+function toggleOptionsSection() {
+    const type = document.getElementById('type').value;
+    const optionsSection = document.getElementById('optionsSection');
+    if (type === 'single_choice' || type === 'multiple_choice') {
+        optionsSection.style.display = 'block';
+    } else {
+        optionsSection.style.display = 'none';
+    }
+}
+
+function toggleEditOptionsSection() {
+    const type = document.getElementById('editType').value;
+    const optionsSection = document.getElementById('editOptionsSection');
+    optionsSection.style.display = ['single_choice', 'multiple_choice'].includes(type) ? 'block' : 'none';
+}
+
+function addOption() {
+    const optionsList = document.getElementById('optionsList');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2';
+    div.innerHTML = `
+        <input type="text" class="form-control" name="options[]" placeholder="选项内容">
+        <button type="button" class="btn btn-outline-danger" onclick="removeOption(this)">
+            <i class="bi bi-dash-circle"></i>
+        </button>
+    `;
+    optionsList.appendChild(div);
+}
+
+function removeOption(button) {
+    button.parentElement.remove();
+}
+
+function submitQuestion() {
+    document.getElementById('questionForm').submit();
+}
+
+let currentQuestionId = null;
+
+function editQuestion(questionId) {
+    currentQuestionId = questionId;
+    
+    // 显示加载状态
+    const modal = new bootstrap.Modal(document.getElementById('editQuestionModal'));
+    modal.show();
+    
+    // 获取题目数据
+    fetch(`/admin/questions/${questionId}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('editQuestionId').value = data.id;
+            document.getElementById('editType').value = data.type;
+            document.getElementById('editContent').value = data.content;
+            document.getElementById('editOptions').value = data.options;
+            document.getElementById('editCorrectAnswer').value = data.correct_answer;
+            document.getElementById('editExplanation').value = data.explanation;
+            
+            toggleEditOptionsSection();
+        })
+        .catch(error => {
+            alert('加载题目失败：' + error.message);
+            modal.hide();
+        });
+}
+
+function updateQuestion() {
+    if (!currentQuestionId) return;
+    
+    const data = {
+        type: document.getElementById('editType').value,
+        content: document.getElementById('editContent').value,
+        options: document.getElementById('editOptions').value,
+        correct_answer: document.getElementById('editCorrectAnswer').value,
+        explanation: document.getElementById('editExplanation').value
+    };
+    
+    // 显示加载状态
+    const saveButton = document.querySelector('#editQuestionModal .btn-primary');
+    const originalText = saveButton.textContent;
+    saveButton.disabled = true;
+    saveButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 保存中...';
+    
+    fetch(`/admin/questions/${currentQuestionId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('保存失败：' + data.error);
+        } else {
+            // 关闭模态框并刷新页面
+            bootstrap.Modal.getInstance(document.getElementById('editQuestionModal')).hide();
+            window.location.reload();
+        }
+    })
+    .catch(error => {
+        alert('保存失败：' + error.message);
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        saveButton.disabled = false;
+        saveButton.textContent = originalText;
+    });
+}
+
+function deleteQuestion(questionId) {
+    currentQuestionId = questionId;
+    const modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    modal.show();
+}
+
+function confirmDelete() {
+    if (!currentQuestionId) return;
+    
+    // 显示加载状态
+    const deleteButton = document.querySelector('#deleteConfirmModal .btn-danger');
+    const originalText = deleteButton.textContent;
+    deleteButton.disabled = true;
+    deleteButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 删除中...';
+    
+    fetch(`/admin/questions/${currentQuestionId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('删除失败：' + data.error);
+        } else {
+            // 关闭模态框并刷新页面
+            bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal')).hide();
+            window.location.reload();
+        }
+    })
+    .catch(error => {
+        alert('删除失败：' + error.message);
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        deleteButton.disabled = false;
+        deleteButton.textContent = originalText;
+    });
+}
+
+function showImportModal() {
+    document.getElementById('importForm').reset();
+    document.getElementById('importResult').style.display = 'none';
+    document.getElementById('importErrors').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('importModal')).show();
+}
+
+function importQuestions() {
+    const form = document.getElementById('importForm');
+    const fileInput = document.getElementById('importFile');
+    const resultDiv = document.getElementById('importResult');
+    const importModal = document.getElementById('importModal');
+    
+    if (!fileInput.files[0]) {
+        showImportResult('请选择文件', 'danger');
+        return;
+    }
+
+    // 创建 FormData 对象
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    // 显示加载动画
+    const loadingOverlay = document.createElement('div');
+    loadingOverlay.className = 'loading-overlay';
+    loadingOverlay.innerHTML = `
+        <div class="spinner-border text-light loading-spinner" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    `;
+    document.body.appendChild(loadingOverlay);
+
+    // 禁用导入按钮
+    const importButton = importModal.querySelector('.btn-primary');
+    importButton.disabled = true;
+    importButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 导入中...';
+
+    // 发送请求
+    fetch('/admin/questions/import', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        // 移除加载动画
+        loadingOverlay.remove();
+        
+        // 重置按钮状态
+        importButton.disabled = false;
+        importButton.innerHTML = '导入';
+        
+        // 重置表单
+        form.reset();
+        
+        // 刷新页面以显示新导入的题目
+        window.location.reload();
+    })
+    .catch(error => {
+        // 移除加载动画
+        loadingOverlay.remove();
+        
+        // 重置按钮状态
+        importButton.disabled = false;
+        importButton.innerHTML = '导入';
+        
+        // 显示错误信息
+        showImportResult('导入失败：' + error.message, 'danger');
+    });
+}
+
+function showImportResult(message, type) {
+    const resultDiv = document.getElementById('importResult');
+    resultDiv.className = `alert alert-${type}`;
+    resultDiv.style.display = 'block';
+    resultDiv.textContent = message;
+}
+
+// 当选择新文件时，清除之前的结果提示
+document.getElementById('importFile').addEventListener('change', function() {
+    document.getElementById('importResult').style.display = 'none';
+});
+
+// 当模态框关闭时，重置表单和结果提示
+document.getElementById('importModal').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('importForm').reset();
+    document.getElementById('importResult').style.display = 'none';
+});
+
+// Update buttons based on selection
+function updateButtons() {
+    const checkedBoxes = document.querySelectorAll('.question-checkbox:checked');
+    const exportBtn = document.getElementById('exportSelected');
+    const deleteBtn = document.getElementById('deleteSelected');
+    const count = checkedBoxes.length;
+    
+    exportBtn.disabled = count === 0;
+    deleteBtn.disabled = count === 0;
+    
+    // Update selected count in bulk delete modal
+    document.getElementById('selectedCount').textContent = count;
+}
+
+// Toggle all checkboxes
+function toggleSelectAll() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.question-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+    updateButtons();
+}
+
+// Export selected questions
+function exportSelected() {
+    const checkedBoxes = document.querySelectorAll('.question-checkbox:checked');
+    const questionIds = Array.from(checkedBoxes).map(cb => cb.value).join(',');
+    
+    if (questionIds) {
+        window.location.href = `/admin/questions/export?ids=${questionIds}`;
+    }
+}
+
+// Show clear all confirmation modal
+function confirmClearAll() {
+    const modal = new bootstrap.Modal(document.getElementById('clearAllModal'));
+    modal.show();
+}
+
+// Clear all questions
+function clearAll() {
+    // Show loading overlay
+    showLoading();
+    
+    fetch('/admin/questions/clear-all', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showAlert('danger', '清空失败：' + data.error);
+        } else {
+            showAlert('success', data.message);
+            setTimeout(() => window.location.reload(), 2000);
+        }
+    })
+    .catch(error => {
+        showAlert('danger', '操作失败：' + error.message);
+    })
+    .finally(() => {
+        hideLoading();
+        const modal = bootstrap.Modal.getInstance(document.getElementById('clearAllModal'));
+        modal.hide();
+    });
+}
+
+// Show bulk delete confirmation modal
+function deleteSelected() {
+    const checkedBoxes = document.querySelectorAll('.question-checkbox:checked');
+    const count = checkedBoxes.length;
+    
+    if (count === 0) return;
+    
+    document.getElementById('selectedCount').textContent = count;
+    const modal = new bootstrap.Modal(document.getElementById('bulkDeleteModal'));
+    modal.show();
+}
+
+// Bulk delete selected questions
+function bulkDelete() {
+    const checkedBoxes = document.querySelectorAll('.question-checkbox:checked');
+    const questionIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+    
+    if (questionIds.length === 0) return;
+    
+    // Show loading overlay
+    showLoading();
+    
+    fetch('/admin/questions/bulk-delete', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ question_ids: questionIds })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showAlert('danger', '删除失败：' + data.error);
+        } else {
+            showAlert('success', data.message);
+            setTimeout(() => window.location.reload(), 2000);
+        }
+    })
+    .catch(error => {
+        showAlert('danger', '操作失败：' + error.message);
+    })
+    .finally(() => {
+        hideLoading();
+        const modal = bootstrap.Modal.getInstance(document.getElementById('bulkDeleteModal'));
+        modal.hide();
+    });
+}
+
+// Show loading overlay
+function showLoading() {
+    const overlay = document.createElement('div');
+    overlay.className = 'loading-overlay';
+    overlay.innerHTML = `
+        <div class="spinner-border text-light loading-spinner" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+// Hide loading overlay
+function hideLoading() {
+    const overlay = document.querySelector('.loading-overlay');
+    if (overlay) overlay.remove();
+}
+
+// Show alert message
+function showAlert(type, message) {
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+    alert.style.zIndex = '9999';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(alert);
+    
+    // Auto dismiss after 3 seconds
+    setTimeout(() => {
+        const bsAlert = new bootstrap.Alert(alert);
+        bsAlert.close();
+    }, 3000);
+}
+</script>
+{% endblock %}
