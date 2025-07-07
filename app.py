@@ -10,6 +10,7 @@ import io
 import csv
 from datetime import datetime
 import os
+from werkzeug.security import generate_password_hash
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -582,7 +583,121 @@ def clear_all_questions():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-if __name__ == '__main__':
+# 用户管理API
+@app.route('/admin/api/users')
+@login_required
+def admin_api_users():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    query = request.args.get('q', '')
+    user_query = User.query
+    if query:
+        user_query = user_query.filter(
+            or_(User.username.ilike(f'%{query}%'), User.email.ilike(f'%{query}%'))
+        )
+    users = user_query.order_by(User.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    return jsonify({
+        'items': [
+            {
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'is_admin': u.is_admin,
+                'created_at': u.created_at.isoformat()
+            } for u in users.items
+        ],
+        'total': users.total,
+        'pages': users.pages,
+        'page': users.page,
+        'per_page': users.per_page,
+        'has_prev': users.has_prev,
+        'has_next': users.has_next,
+        'prev_num': users.prev_num,
+        'next_num': users.next_num
+    })
+
+@app.route('/api/user', methods=['POST'])
+@login_required
+def api_create_user():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json()
+    if not data.get('username') or not data.get('email') or not data.get('password'):
+        return jsonify({'error': 'Missing fields'}), 400
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({'error': 'Username already exists'}), 400
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already exists'}), 400
+    user = User(
+        username=data['username'],
+        email=data['email'],
+        is_admin=data.get('is_admin', False)
+    )
+    user.set_password(data['password'])
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({'message': 'User created'})
+
+@app.route('/api/user/<int:id>', methods=['PUT', 'DELETE'])
+@login_required
+def api_update_delete_user(id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    user = User.query.get_or_404(id)
+    if request.method == 'DELETE':
+        if user.id == current_user.id:
+            return jsonify({'error': 'Cannot delete yourself'}), 400
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'message': 'User deleted'})
+    data = request.get_json()
+    if 'username' in data:
+        if User.query.filter(User.username == data['username'], User.id != id).first():
+            return jsonify({'error': 'Username already exists'}), 400
+        user.username = data['username']
+    if 'email' in data:
+        if User.query.filter(User.email == data['email'], User.id != id).first():
+            return jsonify({'error': 'Email already exists'}), 400
+        user.email = data['email']
+    if 'is_admin' in data:
+        user.is_admin = data['is_admin']
+    db.session.commit()
+    return jsonify({'message': 'User updated'})
+
+@app.route('/api/user/change_password', methods=['POST'])
+@login_required
+def api_change_password():
+    data = request.get_json()
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    if not old_password or not new_password:
+        return jsonify({'error': 'Missing fields'}), 400
+    if not current_user.check_password(old_password):
+        return jsonify({'error': 'Old password incorrect'}), 400
+    current_user.set_password(new_password)
+    db.session.commit()
+    return jsonify({'message': 'Password changed'})
+
+# 用户管理页面
+@app.route('/admin/users')
+@login_required
+def admin_users():
+    if not current_user.is_admin:
+        flash('Access denied.')
+        return redirect(url_for('index'))
+    return render_template('admin/users.html')
+
+def ensure_admin_user():
     with app.app_context():
-        db.create_all()
-    app.run(debug=True)
+        admin = User.query.filter_by(username='admin').first()
+        if not admin:
+            user = User(username='admin', email='admin@example.com', is_admin=True)
+            user.set_password('admin123')
+            db.session.add(user)
+            db.session.commit()
+
+if __name__ == '__main__':
+    ensure_admin_user()
+    app.run()

@@ -11,6 +11,10 @@ services:
       - DATABASE_URI=mysql+pymysql://root:password@db:3306/theory_db
       - FLASK_APP=app.py
       - FLASK_ENV=production
+      - MYSQL_HOST=db
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=password
     restart: always
 
   db:
